@@ -6,6 +6,8 @@ LaiohOS is a simple operating system that can help users learn the core concepts
 ### Introduction
 The loading of the Operating System (OS) into memory is an essential step in a computer's boot sequence. This section outlines the initial storage of the OS on the disk, its loading into memory, and the key stages in this process.
 
+![Subdirectory Image](images/loadOS.jpg)
+
 ### Booting Sequence
 
 #### BIOS and Boot Sector Validation
