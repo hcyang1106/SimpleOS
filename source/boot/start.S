@@ -1,5 +1,5 @@
 /**
- * This code segment (boot) is initially stored in the first sector of the disk.
+ * This block of code (boot) is initially stored in the first sector of the disk.
  * It is then loaded to memory address 0x7c00 after the computer starts.
  * Boot is reponsible for loading the "loader".
  */
@@ -23,5 +23,6 @@ _start:
 	// local jump
 	jmp .
 
+	// set the last two bytes to 0x55, 0xaa (boot_end is set to 0x7dfe in CMakeLists.txt)
 	.section boot_end, "ax"
 boot_sig: .byte 0x55, 0xaa
