@@ -22,6 +22,7 @@ The loading of the Operating System (OS) into memory is an essential step in a c
 #### Boot Sector Limitations and Loader's Role
 - **Size Constraint**: The boot sector holds only 512 bytes, limiting its ability.
 - **Role of Loader**: The boot sector primarily loads a "loader", which then handles complex tasks such as:
+  - Dectecting the memory.
   - Switching to protected mode.
   - Loading the kernel, and more.
 

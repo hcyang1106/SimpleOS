@@ -7,7 +7,8 @@
 
   	.code16 // x86 CPU starts in real mode, which operates on 16 bits architecture
  	.text
-	.global _start // .global makes it accessible by other files 
+	.global _start // .global makes it accessible by other files
+	.extern boot_entry
 _start:
 	// set segment registers to zero
 	mov $0, %ax
@@ -20,7 +21,18 @@ _start:
 	// set the memory before 0x7c00 as stack space
 	mov $_start, %esp
 
-	// local jump
+read_loader:
+	mov $0x8000, %bx // loader be placed at memory address 0x8000
+	mov $0x2, %ah // fixed usage
+	mov $0x0080, %dx // read from hard disk
+	mov $0x2, %cx // read sectors starting from 2nd (1st is boot)
+	mov $64, %al // we want to read 64 sectors
+	int $0x13
+	jc read_loader // retry if it fails
+
+	jmp boot_entry
+
+	// jump to the same location, so it stucks in this line
 	jmp .
 
 	// set the last two bytes to 0x55, 0xaa (boot_end is set to 0x7dfe in CMakeLists.txt)
