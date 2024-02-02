@@ -2,6 +2,8 @@
 #define BOOT_INFO_H
 
 #define BOOT_RAM_REGION_MAX 10
+#define SECTOR_SIZE 512
+#define SYS_KERNEL_LOAD_ADDR (1024 * 1024)
 
 #include "types.h"
 
