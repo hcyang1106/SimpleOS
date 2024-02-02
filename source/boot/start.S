@@ -24,8 +24,8 @@ _start:
 read_loader:
 	mov $0x8000, %bx // loader be placed at memory address 0x8000
 	mov $0x2, %ah // fixed usage
-	mov $0x0080, %dx // read from hard disk
-	mov $0x2, %cx // read sectors starting from 2nd (1st is boot)
+	mov $0x0080, %dx // set head number to zero (dh), set dl to 0x80 to read from hard disk
+	mov $0x0002, %cx // set cylinder number to zero (ch), set cl to 0x02 to read sectors starting from 2nd (1st is MBR)
 	mov $64, %al // we want to read 64 sectors
 	int $0x13
 	jc read_loader // retry if it fails
