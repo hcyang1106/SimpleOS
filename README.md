@@ -52,9 +52,9 @@ To load the kernel, we first load the kernel elf file into memory, and then we e
 
 ![Subdirectory Image](images/kernel_in_mem.png)
 
-After extracting the kernel code, we simply jump to address 0x10000.
+After extracting the kernel, we simply jump to address 0x10000.
 
-Q: Why don't we just load the kernel code directly from disk? 
+Q: Why don't we just load the kernel directly from disk? 
 
 A: Sometimes there are spaces between sections (code, data, etc.). Therefore, the binary file could be large. If we load such a large file directly from disk, it may take a long time.
 
