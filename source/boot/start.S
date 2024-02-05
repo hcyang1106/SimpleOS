@@ -1,7 +1,7 @@
 /**
- * This block of code (boot) is initially stored in the first sector of the disk.
+ * This block of code (MBR) is initially stored in the first sector of the disk.
  * It is then loaded to memory address 0x7c00 after the computer starts.
- * Boot is reponsible for loading the "loader".
+ * MBR is reponsible for loading the "loader".
  */
 	#include "boot.h"
 
