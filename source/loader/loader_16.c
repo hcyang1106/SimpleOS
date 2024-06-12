@@ -18,10 +18,12 @@ static void show_msg(const char *msg) {
     }
 }
 
+// eventually there are two parts that can be used by os
+// one is around address 0-600KB, the other is around 1MB-128MB (mem is set to 128MB in qemu script)
 static void detect_memory(void) {
     show_msg("detecting memory...\r\n");
 
-    SMAP_entry_t smap_entry;
+    SMAP_entry_t smap_entry; // cannot use malloc here (SMAP_entry_t *smap_entry)
     uint32_t contID = 0, signature, bytes;
     
     boot_info.ram_region_count = 0;
@@ -41,6 +43,8 @@ static void detect_memory(void) {
             continue;
         }
 
+        // type equals to 1 is available for os
+        // some are reserved for hardware, type != 1
         if ((&smap_entry)->Type == 1) {
             boot_info.ram_region_info[boot_info.ram_region_count].start = (&smap_entry)->BaseL;
             boot_info.ram_region_info[boot_info.ram_region_count].size = (&smap_entry)->LengthL;
@@ -67,6 +71,7 @@ static void enter_protect_mode(void) {
     cli();
 
     // open the A20 gate
+    // useful link: https://blog.csdn.net/sinolover/article/details/93877845
     uint8_t v = inb(0x92);
     outb(0x92, v | 0x2);
 

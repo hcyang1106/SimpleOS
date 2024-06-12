@@ -1,4 +1,6 @@
 /* Loader: 1. check memory 2. enter protected mode 3. load kernel */
+/* In real mode, programs are not protected, no privilege levels, no virtual memory */
+/* virtual memory: The technique of mapping program (virtual) address space to physical address space */
 
  	.code16 // x86 CPU starts in real mode, which operates on 16 bits architecture
  	.text
