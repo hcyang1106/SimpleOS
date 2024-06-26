@@ -1,7 +1,7 @@
-/**
- * This block of code (MBR) is initially stored in the first sector of the disk.
- * It is then loaded to memory address 0x7c00 after the computer starts.
- * MBR is reponsible for loading the "loader".
+/*
+ The boot sector is stored in the first sector of the disk.
+ It is then loaded to memory address 0x7c00 after the computer starts.
+ The boot sector is reponsible for loading the "loader".
  */
 	#include "boot.h"
 
@@ -10,10 +10,10 @@
 	.global _start // .global makes it accessible by other files
 	.extern boot_entry // function not belonging to this file
 	
-/* program starts from here (specified by CMakeLists.txt) */
+// program starts from here (specified in CMakeLists.txt)
 _start: 
 	// set segment registers to zero
-	// cs register is zero by default
+	// cs register is set to the address where the BIOS loads the boot sector at
 	// segment regs are actually set to zeros by default, so we can also remove this part
 	mov $0, %ax
 	mov %ax, %ds
@@ -27,9 +27,9 @@ _start:
 
 read_loader:
 	// uses BIOS interrupt to read from disk
-	// can use BIOS interrupts to read from disk, display...etc.
+	// BIOS interrupts can be used to read from disk, display...etc.
 	// within 1KB address there's an interrupt vector table
-	// it check the table and goes to the function address saved in the table
+	// it checks the table and goes to the function address saved in the table
 	// GDB: -exec x /20xb 0x8000, can check if data is correct
 	mov $0x8000, %bx // loader be placed at memory address 0x8000
 	mov $0x2, %ah // fixed usage

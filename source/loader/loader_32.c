@@ -15,7 +15,7 @@ static void read_disk(uint32_t sector, uint32_t sector_count, uint8_t *buf) {
 
     outb(0x1F7, 0x24); // Send the "READ SECTORS EXT" command (0x24) to port 0x1F7
 
-    uint16_t *data_buf = (uint16_t *)buf;
+    uint16_t *data_buf = (uint16_t *)buf; // it reads 2 bytes at a time
     while (sector_count--) {
         while ((inb(0x1F7) & 0x88) != 0x8) {}// check if DRQ is one and BSY is zero
         for (int i = 0; i < SECTOR_SIZE / 2; i++) { 
@@ -45,7 +45,7 @@ static uint32_t reload_elf_file(uint8_t *file_buffer) {
             *dest++ = *src++;
         }
 
-        // bss data would not be stored inside elf file.
+        // bss data would not be stored inside elf file. (since they are not initialized we don't need extra space to store them)
         // Elf file uses memsz to specify how large bss and rodata combined is.
         // dest = (uint8_t *)phdr->p_paddr + phdr->p_filesz;
         for (int j = 0; j < phdr->p_memsz - phdr->p_filesz; j++) {
@@ -61,7 +61,7 @@ static void die (int code) {
 }
 
 void load_kernel(void) {
-    read_disk(100, 500, (uint8_t *)SYS_KERNEL_LOAD_ADDR);
+    read_disk(100, 500, (uint8_t *)SYS_KERNEL_LOAD_ADDR); // kernel code is written to 100th sector using script
     uint32_t kernel_entry = reload_elf_file((uint8_t *)SYS_KERNEL_LOAD_ADDR);
     if (kernel_entry == 0) {
         die(-1);
@@ -70,3 +70,5 @@ void load_kernel(void) {
     ((void (*)(boot_info_t *))kernel_entry)(&boot_info); // should use the entry the elf file specifies
     for (;;) {}
 }
+
+// & operator returns the "pointer" of the operand (&int => type of int*)

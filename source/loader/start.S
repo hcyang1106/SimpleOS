@@ -17,6 +17,7 @@ _start:
 	.global protect_mode_entry
 	.extern load_kernel
 protect_mode_entry:
+	// data segment regs need to be set otherwise it is 0
 	mov $16, %ax
 	mov %ax, %ds
 	mov %ax, %ss
