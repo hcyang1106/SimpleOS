@@ -77,6 +77,7 @@ static inline uint32_t read_cr0(void) {
 }
 
 static inline void write_cr0(uint32_t v) {
+    // one % is used for variable in c, two % is used for register in assembly
     __asm__ __volatile__ ("mov %[v], %%cr0"::[v]"r"(v));
 }
 
@@ -84,6 +85,14 @@ static inline void far_jump(uint32_t selector, uint32_t offset) {
     uint32_t addr[] = {offset, selector};
     __asm__ __volatile__ ("ljmpl *(%[a])"::[a]"r"(addr)); // * indicates that we are dereference from an address
     // __asm__ __volatile__ ("ljmpl (%[a])"::[a]"m"(addr));
+}
+
+static inline void hlt(void) {
+    __asm__ __volatile__("hlt");
+}
+
+static inline void write_tr (uint16_t tss_sel) {
+    __asm__ __volatile__("ltr %%ax"::"a"(tss_sel));
 }
 
 #endif
