@@ -5,6 +5,7 @@ __asm__(".code16gcc");
 
 // jumps to _start because we can control the address of _start
 // can't control the address of c functions
+// loader is in another folder so we can't access any loader function
 #define LOADER_START_ADDR 0x8000
 
 void boot_entry(void) {

@@ -45,6 +45,7 @@ void list_remove_node(list_t *list, list_node_t *node);
 
 // &(parent_type*)0->node doesn't get segmentation fault!
 // when writing macro we should always beware of parentheses
+// "node" is a pointer
 #define offset_in_parent(parent_type, node_name) \
     ((uint32_t)&((parent_type*)0)->node_name)
 #define parent_addr(parent_type, node_name, node) \
