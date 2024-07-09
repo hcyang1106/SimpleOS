@@ -4,6 +4,16 @@
 #include <stdarg.h>
 #include "comm/types.h"
 
+static inline uint32_t down(uint32_t size, uint32_t unit) {
+    // return size & ~(unit - 1);
+    return size / unit * unit;
+}
+
+static inline uint32_t up(uint32_t size, uint32_t unit) {
+    // return size + (unit - 1) & ~(unit - 1);
+    return (size + unit - 1) / unit * unit;
+}
+
 // when we won't modify the value char* points to, use const 
 void kernel_strcpy(char *dest, const char *src);
 void kernel_strncpy(char *dest, const char *src, int n);

@@ -2,6 +2,7 @@
 #include "dev/time.h"
 #include "comm/cpu_instr.h"
 #include "os_cfg.h"
+#include "core/task.h"
 
 static uint32_t sys_tick; // bss variables are always set to zero
 
@@ -17,7 +18,12 @@ static void init_pit(void) {
 
 void do_handler_timer(exception_frame_t *frame) {
     sys_tick++;
-    pic_send_eoi(IRQ0_TIMER);
+    pic_send_eoi(IRQ0_TIMER); 
+
+    // (important) task_time_tick should be after pic_send_eoi,
+    // otherwise after switching task pic_send_eoi won't be executed (it goes to somewhere else)
+    // when main switches to init_task, it starts from init_task_entry so pic_send_eoi is not executed
+    task_time_tick(); 
 }
 
 void time_init(void) {

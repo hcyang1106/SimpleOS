@@ -56,7 +56,12 @@ void irq_disable_global(void);
 void irq_enable(int irq_num);
 void irq_disable(int irq_num);
 
+typedef uint32_t irq_state_t;
+irq_state_t irq_enter_protection(void);
+void irq_leave_protection(irq_state_t state);
+
 int gdt_alloc_desc(void); // find an unused space in gdt
+void gdt_free_sel(int sel);
 
 void switch_to_tss(int tss_sel);
 
@@ -67,6 +72,9 @@ void switch_to_tss(int tss_sel);
 
 #define SEG_DPL0 (0 << 5)
 #define SEG_DPL3 (3 << 5)
+
+#define SEG_CPL0 (0 << 0)
+#define SEG_CPL3 (3 << 0)
 
 #define SEG_S_SYSTEM (0 << 4)
 #define SEG_S_NORMAL (1 << 4)

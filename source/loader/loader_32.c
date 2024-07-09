@@ -60,13 +60,43 @@ static void die (int code) {
     for (;;) {}
 }
 
+#define CR4_PSE (1 << 4) // 4MB page
+#define CR0_PG (1 << 31) // turns on page table mode
+#define PDE_P (1 << 0) // descriptor present or not
+#define PDE_W (1 << 1) // write enable
+#define PDE_PS (1 << 7) // 4MB page
+
+// this is just an experiment for 4MB page and is just for loader
+// later in kernel init will use another page table
+void enable_page_mode(void) {
+    static uint32_t page_dir[1024] __attribute__((aligned(4096))) = {
+        [0] = PDE_P | PDE_W | PDE_PS | 0 // map virtual exactly to physical
+    };
+
+    // only if this is set we can use 4MB page
+    uint32_t cr4 = read_cr4();
+    write_cr4(cr4 | CR4_PSE);
+
+    // the manual asks cr3 last 12 bits to be zero, so we make page_dir align to 4096
+    // cr3 sets as page dir address
+    write_cr3((uint32_t)(page_dir));
+
+    write_cr0(read_cr0() | CR0_PG);
+}
+
 void load_kernel(void) {
     read_disk(100, 500, (uint8_t *)SYS_KERNEL_LOAD_ADDR); // kernel code is written to 100th sector using script
     uint32_t kernel_entry = reload_elf_file((uint8_t *)SYS_KERNEL_LOAD_ADDR);
     if (kernel_entry == 0) {
         die(-1);
     }
-    // ((void (*)(boot_info_t *))0x10000)(&boot_info); // jumps to kernel code // kernel entry is not guaranteed to be 0x10000
+
+    enable_page_mode(); // page mode is turned on before jumping to kernel entry
+
+    // kernel is not in the same folder so need to jump to assembly again (same as boot)
+    // ((void (*)(boot_info_t *))0x10000)(&boot_info); // jumps to kernel code,
+    // but kernel entry is not guaranteed to be 0x10000 so use the line below
+    // * when calling a function the caller will push parameters in caller (assembly)
     ((void (*)(boot_info_t *))kernel_entry)(&boot_info); // should use the entry the elf file specifies
     for (;;) {}
 }
