@@ -2,11 +2,16 @@
 #include "comm/cpu_instr.h" // search directory is /source and /source/include, so comm must be added
 #include <stdarg.h>
 #include "tools/klib.h"
+#include "cpu/cpu.h"
+#include "ipc/mutex.h"
 
 #define COM1_PORT 0x3F8
 
+static mutex_t mutex;
+
 // initialization for RS-232
 void log_init(void) {
+    mutex_init(&mutex);
     outb(COM1_PORT + 1, 0x00);
     outb(COM1_PORT + 3, 0x80);   
     outb(COM1_PORT + 0, 0x03);
@@ -27,6 +32,9 @@ void log_printf(const char *fmt, ...) {
     kernel_vsprintf(str_buf, fmt, args);
     va_end(args);
 
+    // irq_state_t state = irq_enter_protection();
+    mutex_lock(&mutex);
+
     char *p = str_buf;
     while (*p) {
         // check if it is busy or not (check if the sixth bit is zero)
@@ -34,9 +42,12 @@ void log_printf(const char *fmt, ...) {
         outb(COM1_PORT, *p);
         p++;
     }
-
+    
     outb(COM1_PORT, '\r');
     outb(COM1_PORT, '\n');
+
+    // irq_leave_protection(state);
+    mutex_unlock(&mutex);
 }
 
 

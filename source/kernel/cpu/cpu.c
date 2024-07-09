@@ -2,6 +2,9 @@
 #include "os_cfg.h"
 #include "comm/cpu_instr.h"
 #include "tools/log.h"
+#include "ipc/mutex.h"
+
+static mutex_t mutex;
 
 void exception_handler_unknown (void);
 void exception_handler_divider (void);
@@ -290,21 +293,55 @@ void irq_disable_global(void) {
 }
 
 void cpu_init(void) {
+    // mutex_init(&mutex);
     init_gdt();
     init_idt();
 }
 
 int gdt_alloc_desc(void) {
+    // irq_state_t state = irq_enter_protection();
+    mutex_lock(&mutex);
+
     // i should begin with 1 because 0 is not used
     for (int i = 1; i < GDT_TABLE_SIZE; i++) {
         if (gdt_table[i].attr == 0) {
+            // irq_leave_protection(state);
+            // mutex_unlock(&mutex);
             return i * sizeof(segment_desc_t);
         }
     }
 
+    // irq_leave_protection(state);
+    mutex_unlock(&mutex);
+
     return -1;
+}
+
+void gdt_free_sel(int sel) {
+    mutex_lock(&mutex);
+
+    gdt_table[sel / sizeof(segment_desc_t)].attr = 0;
+
+    mutex_unlock(&mutex);
 }
 
 void switch_to_tss(int tss_sel) {
     far_jump(tss_sel, 0);
+}
+
+// Q: why can't we just simply use irq_disable_global and irq_enable_global
+// to control critical section?
+// A: if interrupt is "disabled" at first, then we call irq_disable_global -> irq_enable_global
+// will make the interrupt "enabled", which is inconsistent
+
+irq_state_t irq_enter_protection(void) {
+    irq_state_t state = read_eflags();
+    irq_disable_global();
+    return state;
+}
+
+void irq_leave_protection(irq_state_t state) {
+    // instead of enabling the interrupt, we revocer eflags
+    // irq_enable_global();
+    write_eflags(state);
 }
