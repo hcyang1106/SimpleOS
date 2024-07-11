@@ -7,6 +7,7 @@
 #include "comm/boot_info.h"
 
 #define PDE_CNT 1024
+#define MEM_PAGE_SIZE (4096)
 
 typedef struct {
     mutex_t mutex;
@@ -26,5 +27,7 @@ typedef struct {
 void memory_init(boot_info_t *boot_info);
 uint32_t memory_create_uvm(void);
 int alloc_mem_for_task(uint32_t page_dir, uint32_t page_count, uint32_t vstart, uint32_t perm);
+uint32_t mem_alloc_page(int page_count);
+void mem_free_page(uint32_t addr, int page_count);
 
 #endif

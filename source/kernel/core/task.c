@@ -22,46 +22,69 @@ static void idle_task_entry(void) {
 
 void simple_switch(uint32_t **from , uint32_t *to);
 
-static void tss_init(task_t *task, uint32_t entry, uint32_t esp) {
+static void tss_init(task_t *task, int flag, uint32_t entry, uint32_t esp) {
     // a process can be created a long time after the kernel runs
     // so we're unsure where is empty in gdt, so this alloc func is needed
     int tss_sel = gdt_alloc_desc(); 
-    if (tss_sel < 0) {
+    if (tss_sel <= 0) {
         log_printf("alloc for tss in gdt failed");
-        return;
+        goto tss_init_failed;
     }
 
     segment_desc_set(tss_sel, (uint32_t)&task->tss, sizeof(tss_t), SEG_P_PRESENT | SEG_DPL0 | SEG_TSS);
 
     kernel_memset(&task->tss, 0, sizeof(tss_t));
 
-    int code_sel, data_sel;
-    code_sel = task_manager.task_code_sel | SEG_CPL3;
-    data_sel = task_manager.task_data_sel | SEG_CPL3;
+    // one page for stack level 0
+    // stack level 3 is right behind the code of task
+    uint32_t kernel_stack = mem_alloc_page(STACK_ZERO_PAGE_COUNT);
+    if (kernel_stack == 0) {
+        // has to free up the resources before mem_alloc_page!
+        log_printf("mem alloc page for level zero stack failed");
+        goto tss_init_failed;
+    }
 
+    int code_sel, data_sel;
+    if (flag == TASK_FLAG_SYSTEM) {
+        code_sel = KERNEL_SELECTOR_CS;
+        data_sel = KERNEL_SELECTOR_DS;
+    } else {
+        code_sel = task_manager.task_code_sel | SEG_CPL3;
+        data_sel = task_manager.task_data_sel | SEG_CPL3;
+    }
+    
     task->tss.eip = entry;
-    task->tss.esp = task->tss.esp0 = esp;
-    task->tss.ss = task->tss.ss0 = data_sel;
+    task->tss.esp = esp;
+    task->tss.esp0 = kernel_stack + STACK_ZERO_PAGE_COUNT * MEM_PAGE_SIZE;
+    task->tss.ss0 = KERNEL_SELECTOR_DS;
+    task->tss.ss = data_sel;
     task->tss.ds = task->tss.es = task->tss.fs = task->tss.gs = data_sel;
     task->tss.cs = code_sel;
     task->tss.eflags = EFLAGS_DEFAULT | EFLAGS_IF; // set if flag as 1
     uint32_t page_dir = memory_create_uvm();
     if (page_dir == 0) {
-        gdt_free_sel(tss_sel);
         log_printf("create page dir for process failed");
-        return;
+        goto tss_init_failed;
     }
     
     task->tss.cr3 = page_dir;
     task->tss_sel = tss_sel;
+    return;
+
+tss_init_failed:
+    gdt_free_sel(tss_sel);
+    if (kernel_stack) {
+        mem_free_page((uint32_t)kernel_stack, STACK_ZERO_PAGE_COUNT);
+    }
+    return;
 }
 
 // cr3 is not replaced when doing task switching
-void task_init(task_t *task, const char *name, uint32_t entry, uint32_t esp) {
+void task_init(task_t *task, const char *name, int flag, uint32_t entry, uint32_t esp) {
     // recall the definition of null pointer
     // null pointer is unequal to any pointer pointing to an object or function
     ASSERT(task != (task_t*)0);
-    tss_init(task, entry, esp); // this is for hardware switching
+    tss_init(task, flag, entry, esp); // this is for hardware switching
 
     kernel_strncpy(task->name, name, TASK_NAME_SIZE);
     task->state = TASK_CREATED;
@@ -116,18 +139,20 @@ void task_manager_init(void) {
     list_init(&task_manager.task_list);
     list_init(&task_manager.sleep_list);
     // stack grows from high to low and esp moves downwards first before pushing, so set as 1024 instead of 1023 
-    task_init(&task_manager.idle_task, "idle task", (uint32_t)idle_task_entry, (uint32_t)&idle_task_stack[1024]);
+    task_init(&task_manager.idle_task, "idle task", TASK_FLAG_SYSTEM, (uint32_t)idle_task_entry, (uint32_t)&idle_task_stack[1024]);
 }
 
 void main_task_init(void) {
-    extern uint8_t s_main_task, e_main_task;
+    extern uint8_t s_main_task, e_main_task; // physical address
 
     uint32_t copy_size = (uint32_t)&e_main_task - (uint32_t)&s_main_task;
     // assume that 10 pages are enough for main_task
     uint32_t page_count = MAIN_TASK_PAGE;
     
+    // at first I wrote (uint32_t)&s_main_task + copy_size, this is wrong
+    task_init(&task_manager.main_task, "main task", TASK_FLAG_NORMAL,
+             (uint32_t)main_task_entry, (uint32_t)main_task_entry + copy_size);
 
-    task_init(&task_manager.main_task, "main task", (uint32_t)main_task_entry, 0);
     write_tr(task_manager.main_task.tss_sel);
     task_manager.curr_task = &task_manager.main_task;
 
@@ -140,7 +165,7 @@ void main_task_init(void) {
     mmu_set_page_dir(page_dir); 
     
     // we want to paste it soe definitely with PTE_W
-    alloc_mem_for_task(page_dir, page_count, (uint32_t)main_task_entry, PTE_P | PTE_W);
+    alloc_mem_for_task(page_dir, page_count, (uint32_t)main_task_entry, PTE_P | PTE_W | PTE_U);
     kernel_memcpy(main_task_entry, &s_main_task, copy_size);
 }
 
@@ -294,3 +319,12 @@ void task_set_unsleep(task_t *task) {
 // however, this result in main_task running in level 0 and "idle task" running in level 3
 // we want main_task running in level 3 and idle task running in 0
 // so first we make idle task initialization sepecialized
+
+// set up different stack for different privilege level
+// when exception happens (how about interrupt?), CPL changes to 0 when executing handler function
+// i think it's because we set KERNEL_SELECTOR_CS in every gate entry
+// also there is DPL in gate entry?
+// why do we need different stack for different level?
+// why it doesn't run when no level 0 stack is allocated?
+
+// for different levels of the same task, they should have different stacks (one for 0, one for 3)

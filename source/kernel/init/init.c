@@ -8,29 +8,38 @@
 #include "core/task.h"
 #include "comm/cpu_instr.h"
 #include "tools/list.h"
+#include "ipc/sem.h"
+#include "core/memory.h"
 
 // static task_t main_task; relocate to task
 static task_t init_task;
 static uint32_t init_task_stack[1024];
+static sem_t sem;
 
 void kernel_init(boot_info_t *boot_info) {
     ASSERT(boot_info->ram_region_count != 0);
     // ASSERT(3 < 2); // used to test ASSERT
     cpu_init();
     log_init();
+    memory_init(boot_info);
     time_init();
     task_manager_init();
 }
 
-void init_task_entry(void) {
-    int count = 0;
-    for (;;) {
-        log_printf("init task: %d", count++);
-        // below is not a good way to switch because it the switch-to task is fixed
-        // task_switch_from_to(&init_task, task_main_task());
-        sys_sched_yield();
-    }
-}
+// init task code is later seperated from os code
+
+// void init_task_entry(void) {
+//     int count = 0;
+//     for (;;) {
+//         // sem_wait(&sem);
+//         log_printf("init task: %d", count++);
+//         // below is not a good way to switch because the switch-to task is fixed
+//         // task_switch_from_to(&init_task, task_main_task());
+//         // below is not a good way because it only stops by itself
+//         // sys_sched_yield();
+//         // sys_sleep(500);
+//     }
+// }
 
 // static void list_test(void) {
 //     list_t list;
@@ -111,6 +120,38 @@ void init_task_entry(void) {
 //     log_printf("parent pointer: %d", parent_pointer(struct type_t, node, &v.node)->i);
 // }
 
+void move_to_main_task(void) {
+    task_t *main_task = task_main_task();
+    ASSERT (main_task != (task_t*)0);
+
+    tss_t *tss = &(main_task->tss);
+    // this part is used to set cpl to 3
+    // otherwise main task runs at level 0
+    // after iret they pop to corresponding regs
+    
+    __asm__ __volatile__(
+        // "jmp *%[eip]"::[eip]"r"(tss->eip)
+        "push %[ss]\n\t"
+        "push %[esp]\n\t"
+        "push %[eflags]\n\t"
+        "push %[cs]\n\t"
+        "push %[eip]\n\t"
+        "iret"
+        ::[ss]"r"(tss->ss),
+        [esp]"r"(tss->esp),
+        [eflags]"r"(tss->eflags),
+        [cs]"r"(tss->cs),
+        [eip]"r"(tss->eip)
+    );
+    
+    // can also do it like this:
+    // int a = 10;
+    // void main_task_entry(int);
+    // main_task_entry(a);
+    // this is for experiment to see whether arguments matters
+    // can just declare void main_task_entry(void)
+}
+
 void init_main() {
     log_printf("");
 
@@ -124,20 +165,29 @@ void init_main() {
     // when this exception happens, it executes the instruction again
     // therefore if exception in kernel happens it stucks
     // int a = 3 / 0;
-    // irq_enable_global(); // close it otherwise it is hard to debug (it will constantly run into time interrupt)
     
-    // task_init(&main_task, 0, 0); // the main task doesn't need to set entry address and esp
+        // task_init(&main_task, 0, 0); // the main task doesn't need to set entry address and esp
     // stack grows from high to low, when inserting, first minus four then do the insert (so set as 1024)
-    task_init(&init_task, "init task", (uint32_t)init_task_entry, (uint32_t)&init_task_stack[1024]);
+    // task_init(&init_task, "init task", (uint32_t)init_task_entry, (uint32_t)&init_task_stack[1024]);
     main_task_init();
-    // write_tr(main_task.tss_sel);
+        // write_tr(main_task.tss_sel);
 
-    int count = 0;
-    for (;;) {
-        log_printf("init main: %d", count++);
-        // task_switch_from_to(task_main_task(), &init_task);
-        sys_sched_yield();
-    }
+    // sem_init should be before irq_enable_global, otherwise it may switch to init_task
+    // and execute sem_wait, which is not allowed before initialization
+    // sem_init(&sem, 0); 
+    // irq_enable_global(); // close it otherwise it is hard to debug (it will constantly run into time interrupt)
+
+    // original code of main_task
+    // int count = 0;
+    // for (;;) {
+    //     log_printf("init main: %d", count++);
+    //     // sem_notify(&sem);
+    //     // sys_sleep(1000);
+    //     // task_switch_from_to(task_main_task(), &init_task);
+    //     // sys_sched_yield();
+    // }
+
+    move_to_main_task();
 }
 
 // use hardware to switch tasks:

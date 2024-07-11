@@ -4,7 +4,6 @@
 #include "cpu/mmu.h"
 
 #define MEM_EXT_START (1024 * 1024)
-#define MEM_PAGE_SIZE (4096)
 #define MEM_EBDA_START (0x80000)
 #define MEM_TASK_BASE (0x80000000) // above is space for tasks
 #define MEM_EXT_END (127 * 1024 * 1024)
@@ -25,7 +24,7 @@ uint32_t mem_size, uint32_t page_size) {
 
 // allocate (page_count) pages
 // find the starting address of (page_count) continuous unused pages
-static uint32_t mem_alloc_page(mem_alloc_t *mem_alloc, int page_count) {
+static uint32_t _mem_alloc_page(mem_alloc_t *mem_alloc, int page_count) {
     uint32_t addr = 0;
     mutex_lock(&mem_alloc->mutex);
 
@@ -39,13 +38,58 @@ static uint32_t mem_alloc_page(mem_alloc_t *mem_alloc, int page_count) {
     return addr;
 }
 
-static void mem_free_page(mem_alloc_t *mem_alloc, uint32_t start, int page_count) {
+pte_t *find_pte(pde_t *page_dir, uint32_t vstart, int alloc) {
+    pde_t *pde = page_dir + pde_index(vstart);
+    if (pde->present) {
+        return (pte_t *)(pde->phy_pt_addr << 12) + pte_index(vstart);
+    } else {
+        if (alloc == 0) {
+            return (pte_t*)0;
+        }
+        // create a page table, page table is of size 4096
+        uint32_t phy_pt_addr = _mem_alloc_page(&mem_alloc, 1);
+        if (phy_pt_addr == 0) {
+            return (pte_t *)0;
+        }
+         // set up pde
+        pde->v = phy_pt_addr | PDE_P | PDE_U | PDE_W;
+        // important! otherwise there might some present bits might be 1
+        // if remove this line next time when we want to insert to a new pte
+        // it already has present bit 1
+        kernel_memset((uint8_t*)phy_pt_addr, 0, MEM_PAGE_SIZE); 
+       
+        
+        return (pte_t*)phy_pt_addr + pte_index(vstart);
+    }
+}
+
+// exported version of mem_alloc_page
+uint32_t mem_alloc_page(int page_count) {
+    return _mem_alloc_page(&mem_alloc, page_count);
+}
+
+static void _mem_free_page(mem_alloc_t *mem_alloc, uint32_t start, int page_count) {
     mutex_lock(&mem_alloc->mutex);
 
     int page_index = (start - mem_alloc->start) / (mem_alloc->page_size);
     bitmap_set_bit(&mem_alloc->bitmap, page_index, page_count, 0);
 
     mutex_unlock(&mem_alloc->mutex);
+}
+
+void mem_free_page(uint32_t addr, int page_count) {
+    // _mem_free_page(&mem_alloc, addr, page_count); simply doing this is wrong 
+    // because we also have to deal with the mapping already stored in page table (possibly)
+    if (addr < MEM_TASK_BASE) {
+        _mem_free_page(&mem_alloc, addr, page_count);
+    } else {
+        pte_t *pte = find_pte((pde_t*)(task_current()->tss.cr3), addr, 0);
+        ASSERT(pte && pte->present);
+        _mem_free_page(&mem_alloc, addr, page_count);
+        pte->v = 0; // this sets present bit
+    }
+
+    return;
 }
 
 static void show_mem_info(boot_info_t *boot_info) {
@@ -64,31 +108,6 @@ static uint32_t total_mem_size(boot_info_t *boot_info) {
         mem_size += boot_info->ram_region_info[i].size;
     }
     return mem_size;
-}
-
-pte_t *find_pte(pde_t *page_dir, uint32_t vstart, int alloc) {
-    pde_t *pde = page_dir + pde_index(vstart);
-    if (pde->present) {
-        return (pte_t *)(pde->phy_pt_addr << 12) + pte_index(vstart);
-    } else {
-        if (alloc == 0) {
-            return (pte_t*)0;
-        }
-        // create a page table, page table is of size 4096
-        uint32_t phy_pt_addr = mem_alloc_page(&mem_alloc, 1);
-        if (phy_pt_addr == 0) {
-            return (pte_t *)0;
-        }
-         // set up pde
-        pde->v = phy_pt_addr | PDE_P | PDE_U | PDE_W;
-        // important! otherwise there might some present bits might be 1
-        // if remove this line next time when we want to insert to a new pte
-        // it already has present bit 1
-        kernel_memset((uint8_t*)phy_pt_addr, 0, MEM_PAGE_SIZE); 
-       
-        
-        return (pte_t*)phy_pt_addr + pte_index(vstart);
-    }
 }
 
 // create page table entries
@@ -137,15 +156,18 @@ static void create_kernel_table(void) {
     }  
 }
 
+// allocate a page directory
+// set make lower pdes point to kernel pages (which is already created)
+// return page dir addr
 uint32_t memory_create_uvm(void) {
-    uint32_t pg_dir_addr = mem_alloc_page(&mem_alloc, 1);
+    uint32_t pg_dir_addr = _mem_alloc_page(&mem_alloc, 1);
     if (pg_dir_addr == 0) {
         return 0;
     }
 
     // page directory needs to be initialized
     kernel_memset((void*)pg_dir_addr, 0, MEM_PAGE_SIZE);
-    uint32_t user_pde_start = pde_index(MEM_TASK_BASE);
+    uint32_t user_pde_start = pde_index(MEM_TASK_BASE); // until the start of task code
     pde_t *p = (pde_t*)pg_dir_addr;
     for (int i = 0; i < user_pde_start; i++) {
         p[i].v = kernel_page_dir[i].v; // can use the page tables already created 
@@ -154,13 +176,15 @@ uint32_t memory_create_uvm(void) {
     return pg_dir_addr;
 }
 
+// allocate page in physical mem and map the phy starting addr with virtual address vstart
+// todo: if memory_create_map fails should do mem_free_page
 int alloc_mem_for_task(uint32_t page_dir, uint32_t page_count, uint32_t vstart, uint32_t perm) {
     if (!page_dir) {
         log_printf("page dir not found");
         return -1;
     }
     for (int i = 0; i < page_count; i++) {
-        uint32_t pstart = mem_alloc_page(&mem_alloc, 1);
+        uint32_t pstart = _mem_alloc_page(&mem_alloc, 1);
         if (pstart == 0) {
             log_printf("mem alloc page failed");
             return -1;
@@ -186,7 +210,7 @@ void memory_init(boot_info_t *boot_info) {
     // mem_alloc_init(&mem_alloc, bytes, 0x1000, 64*4096, 4096);
     // // alloc pages
     // for (int i = 0; i < 32; i++) {
-    //     uint32_t addr = mem_alloc_page(&mem_alloc, 2);
+    //     uint32_t addr = _mem_alloc_page(&mem_alloc, 2);
     //     log_printf("0x%x", addr);
     // }
     // // free pages

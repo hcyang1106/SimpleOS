@@ -7,6 +7,9 @@
 #define TASK_NAME_SIZE 32
 #define TASK_TIME_TICKS_DEFAULT 10
 #define MAIN_TASK_PAGE 10
+#define TASK_FLAG_SYSTEM 1
+#define TASK_FLAG_NORMAL 0
+#define STACK_ZERO_PAGE_COUNT 1
 
 typedef struct _task_t {
     enum {
@@ -38,7 +41,7 @@ typedef struct {
     int task_data_sel;
 }task_manager_t;
 
-void task_init(task_t *task, const char *name, uint32_t entry, uint32_t esp);
+void task_init(task_t *task, const char *name, int flag, uint32_t entry, uint32_t esp);
 void task_switch_from_to(task_t *from, task_t *to);
 void task_manager_init(void);
 void main_task_init(void);

@@ -41,6 +41,7 @@ typedef struct _exception_frame_t {
     uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
     uint32_t num, error_code;
     uint32_t eip, cs, eflags;
+    uint32_t esp3, ss3;
 }exception_frame_t;
 
 typedef void(*irq_handler_t)(void); // defines a type irq_handler_t which is a pointer to void(*)(void)
@@ -133,5 +134,12 @@ void switch_to_tss(int tss_sel);
 #define PIC_ICW4_8086	    (1 << 0)
 #define PIC_OCW2_EOI		(1 << 5)
 #define IRQ_PIC_START		0x20
+
+#define ERR_PAGE_P (1 << 0)
+#define ERR_PAGE_WR (1 << 1)
+#define ERR_PAGE_US (1 << 2)
+
+#define ERR_EXT (1 << 0)
+#define ERR_IDT (1 << 1)
 
 #endif

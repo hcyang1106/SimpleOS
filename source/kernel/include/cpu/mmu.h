@@ -9,6 +9,7 @@
 #define PTE_W (1 << 1)
 #define PDE_U (1 << 2)
 #define PDE_W (1 << 1)
+#define PTE_U (1 << 2)
 
 // useful links for union:
 // basically it is used to save memory
