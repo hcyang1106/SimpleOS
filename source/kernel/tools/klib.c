@@ -7,6 +7,32 @@
 
 // void*: Before dereferencing, the data that a void pointer points to must undergo proper typecasting to the correct type to be used
 
+int strings_count(char **start) {
+    int count = 0;
+    if (!start) {
+        return 0;
+    }
+    while (*start) {
+        count++;
+        start++;
+    }
+
+    return count;
+}
+
+const char *get_file_name(const char *name) {
+    if (!name) {
+        return name;
+    }
+
+    int len = kernel_strlen(name);
+    const char *s = name + len - 1; // the last char
+    while (s >= name && *s != '/') {
+        s--;
+    }
+
+    return s + 1;
+}
 
 void kernel_strcpy(char *dest, const char *src) { 
     // char* means we will modify the value it points to
@@ -126,7 +152,7 @@ int kernel_memcmp(const void *d1, const void *d2, int n) {
     const uint8_t *b1 = d1;
     const uint8_t *b2 = d2;
 
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++, b1++, b2++) {
         if (*b1 < *b2) {
             return -1;
         }

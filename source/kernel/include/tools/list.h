@@ -48,10 +48,10 @@ void list_remove_node(list_t *list, list_node_t *node);
 // "node" is a pointer
 #define offset_in_parent(parent_type, node_name) \
     ((uint32_t)&((parent_type*)0)->node_name)
-#define parent_addr(parent_type, node_name, node) \
-    ((uint32_t)node - offset_in_parent(parent_type, node_name))
-#define parent_pointer(parent_type, node_name, node) \
-    ((parent_type*)parent_addr(parent_type, node_name, node))
+#define parent_addr(parent_type, node_name, list_node_ptr) \
+    ((uint32_t)list_node_ptr - offset_in_parent(parent_type, node_name))
+#define parent_pointer(parent_type, node_name, list_node_ptr) \
+    ((parent_type*)(list_node_ptr ? parent_addr(parent_type, node_name, list_node_ptr) : 0))
 
 
 #endif

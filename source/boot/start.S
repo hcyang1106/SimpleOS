@@ -3,12 +3,13 @@
  It is then loaded to memory address 0x7c00 after the computer starts.
  The boot sector is reponsible for loading the "loader".
  */
-	#include "boot.h"
+ 
+#include "boot.h"
 
-  	.code16 // x86 CPU starts in real mode, which operates on 16 bits architecture
- 	.text
-	.global _start // .global makes it accessible by other files
-	.extern boot_entry // function not belonging to this file
+.code16 // x86 CPU starts in real mode, which operates on 16 bits architecture
+.text
+.global _start // .global makes it accessible by other files
+.extern boot_entry // function not belonging to this file
 	
 // program starts from here (specified in CMakeLists.txt)
 _start: 

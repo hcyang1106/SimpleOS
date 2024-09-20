@@ -28,15 +28,15 @@ void kernel_vsprintf(char *buf, const char *fmt, va_list args);
 void kernel_sprintf(char *buf, const char *fmt, ...);
 void kernel_itoa(char *buf, int num, int base);
 
-#ifndef RELEASE
+int strings_count(char **start);
+const char *get_file_name(const char *name);
 
+#ifndef RELEASE
 #define ASSERT(expr) if(!(expr)) panic(__FILE__, __LINE__, __func__, #expr) // # turns expr into string
 // only use this prototype when defined RELEASE
 void panic(const char *file, int line, const char *func, const char *cond);
-
 #else
-#define ASSERT(expr) ((void)0)
-
+#define ASSERT(expr)    ((void)0)
 #endif
 
 #endif
