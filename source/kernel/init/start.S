@@ -103,6 +103,8 @@ exception_handler smd_exception, 19, 0
 exception_handler virtual_exception, 20, 0
 
 exception_handler timer, 0x20, 0
+exception_handler kbd, 0x21, 0
+exception_handler disk_primary, 0x2E, 0
 
 
     .text
@@ -132,6 +134,42 @@ simple_switch:
     pop %ebp
 
     ret
+
+    .global syscall_handler
+    .extern do_handler_syscall
+syscall_handler:
+    pusha
+    push %ds
+    push %es
+    push %fs
+    push %gs
+    pushf # for eflags
+
+    push %esp
+    # a function that carries one param
+    # the param is esp, which 
+    call do_handler_syscall
+    add $4, %esp
+
+    popf
+    pop %gs
+    pop %fs
+    pop %es
+    pop %ds
+    popa
+
+
+    # simply using ret here will only pop out the eip,
+    # privilege level will still be zero
+    # this is used to tell cpu how many "bytes" should be popped (the params)
+    # five 4 bytes params
+    # after this instruction both level 0 stack and level 3 stack esp will move up
+    # level 3 move up 4*5 and level 0 move up 4*5 and more (also popped eip, cs, ss, esp...)
+    # when doing fork, the child process will not go through this,
+    # so we need to manually move up its esp
+    retf $(4 * 5) 
+
+
 
 // Caller‐save registers are responsibility of the caller
 // • Caller‐save register values saved only if used "after call/return"
