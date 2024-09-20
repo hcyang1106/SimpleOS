@@ -17,7 +17,7 @@ void mutex_lock(mutex_t *mutex) {
             // does not refer to the "outer" curr, it refers to the inner curr itself (shadowing)
             // task_t *curr = curr;
             task_set_unready(curr);
-            list_insert_last(&mutex->wait_list, &curr->wait_node);
+            list_insert_last(&mutex->wait_list, &curr->run_node); // change from wait_node to run_node
             task_dispatch();
         } else {
             mutex->locked_count++;
@@ -38,7 +38,7 @@ void mutex_unlock(mutex_t *mutex) {
             mutex->owner = (task_t*)0;
             if (list_count(&mutex->wait_list) > 0) {
                 list_node_t *first = list_first(&mutex->wait_list);
-                task_t *t = parent_pointer(task_t, wait_node, first);
+                task_t *t = parent_pointer(task_t, run_node, first); // change from wait-node to run_node
                 list_remove_first(&mutex->wait_list);
                 task_set_ready(t);
                 mutex->locked_count = 1;

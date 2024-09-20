@@ -17,7 +17,7 @@ void sem_wait(sem_t *sem) {
     } else {
         task_t *curr = task_current();
         task_set_unready(curr);
-        list_insert_last(&sem->wait_list, &curr->wait_node);
+        list_insert_last(&sem->wait_list, &curr->run_node); // change from wait_node to run_node
         task_dispatch();
     }
 
@@ -30,8 +30,9 @@ void sem_notify(sem_t *sem) {
     if (list_count(&sem->wait_list) > 0) {
         list_node_t *node = list_first(&sem->wait_list);
         list_remove_first(&sem->wait_list);
-        task_t *p = parent_pointer(task_t, wait_node, node);
+        task_t *p = parent_pointer(task_t, run_node, node); // change from wait_node to run_node
         task_set_ready(p);
+        task_dispatch();
     } else {
         sem->count++;
     }
