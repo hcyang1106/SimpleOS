@@ -40,6 +40,10 @@ static inline void outb(uint16_t port, uint8_t data) {
     __asm__ __volatile__("outb %[v], %[p]" :: [p]"d"(port), [v]"a"(data));
 }
 
+static inline void outw(uint16_t port, uint16_t data) { 
+    __asm__ __volatile__("out %[v], %[p]" :: [p]"d"(port), [v]"a"(data));
+}
+
 // useful link for usage of m: https://juejin.cn/post/6991364336316842014
 static inline void lgdt(uint32_t start, uint32_t size) {
     struct {
@@ -175,3 +179,4 @@ static inline void write_eflags(uint32_t eflags) {
 //     dec edx       ; Decrement loop counter
 //     jnz loop      ; Jump back to loop if not zero
 //     ; ecx now holds the final value of 'c'
+

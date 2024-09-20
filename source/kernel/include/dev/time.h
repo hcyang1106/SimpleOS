@@ -11,5 +11,6 @@
 #define PIT_MODE3                   (3 << 1)
 
 void time_init(void);
+void exception_handler_timer(void);
 
 #endif

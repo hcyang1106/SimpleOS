@@ -6,8 +6,6 @@
 
 static uint32_t sys_tick; // bss variables are always set to zero
 
-void exception_handler_timer(void);
-
 static void init_pit(void) {
     uint32_t reload_count = PIT_OSC_FREQ / (1000.0 / OS_TICK_MS);
 
