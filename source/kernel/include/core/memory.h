@@ -7,7 +7,13 @@
 #include "comm/boot_info.h"
 
 #define PDE_CNT 1024
+#define PTE_CNT 1024
 #define MEM_PAGE_SIZE (4096)
+#define MEM_TASK_BASE (0x80000000) // above is space for tasks
+
+#define MEM_TASK_STACK_TOP 0xE0000000
+#define MEM_TASK_STACK_SIZE (MEM_PAGE_SIZE * 500)
+#define MEM_TASK_ARG_SIZE (MEM_PAGE_SIZE * 4)
 
 typedef struct {
     mutex_t mutex;
@@ -29,5 +35,10 @@ uint32_t memory_create_uvm(void);
 int alloc_mem_for_task(uint32_t page_dir, uint32_t page_count, uint32_t vstart, uint32_t perm);
 uint32_t mem_alloc_page(int page_count);
 void mem_free_page(uint32_t addr, int page_count);
+uint32_t memory_copy_uvm(uint32_t page_dir);
+void memory_destroy_uvm(uint32_t page_dir);
+uint32_t memory_get_paddr(uint32_t page_dir, uint32_t vaddr);
+int memory_copy_uvm_data(uint32_t to, uint32_t page_dir, uint32_t from, uint32_t size);
+char *sys_sbrk(int incr);
 
 #endif

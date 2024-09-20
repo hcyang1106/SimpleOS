@@ -2,10 +2,10 @@
 #include "tools/log.h"
 #include "tools/klib.h"
 #include "cpu/mmu.h"
+#include "dev/console.h"
 
 #define MEM_EXT_START (1024 * 1024)
 #define MEM_EBDA_START (0x80000)
-#define MEM_TASK_BASE (0x80000000) // above is space for tasks
 #define MEM_EXT_END (127 * 1024 * 1024)
 
 static mem_alloc_t mem_alloc;
@@ -139,6 +139,7 @@ static void create_kernel_table(void) {
         {0, &s_text, 0, PTE_W},
         {&s_text, &e_text, &s_text, 0},
         {&s_data, (void*)MEM_EBDA_START - 1, &s_data, PTE_W},
+        {(void*)CONSOLE_DISP_START, (void*)CONSOLE_DISP_END, (void*)CONSOLE_DISP_START, PTE_W}, // display mem not accesible by user
         {(void*)MEM_EXT_START, (void*)MEM_EXT_END - 1, (void*)MEM_EXT_START, PTE_W}
     };
 
@@ -239,3 +240,158 @@ void memory_init(boot_info_t *boot_info) {
 
     mmu_set_page_dir((uint32_t)kernel_page_dir);
 }
+
+uint32_t memory_copy_uvm(uint32_t page_dir) {
+    uint32_t to_page_dir = memory_create_uvm();
+    if (!to_page_dir) {
+        goto copy_uvm_failed;
+    }
+
+    uint32_t user_pde_start = pde_index(MEM_TASK_BASE);
+    pde_t *pde = (pde_t*)page_dir + user_pde_start;
+    for (int i = user_pde_start; i < PDE_CNT; i++, pde++) { // i and j are needed to calc virtual address
+        if (!pde->present) {
+            continue;
+        }
+
+        pte_t *pte = (pte_t *)pde_paddr(pde);
+        for (int j = 0; j < PTE_CNT; j++, pte++) {
+            if (!pte->present) {
+                continue;
+            }
+
+            // from_page_start is a phy addr, but is can also be viewed as a virt addr
+            // that points to "phy addr from_page_start", the phy addr from_page_start
+            // is also pointed by another virt addr "i << 22 | j << 12"
+            // uint32_t from_page_start = (uint32_t)pte->phy_page_addr << 12;
+            // we'll use "i << 22 | j << 12"
+            uint32_t from_page_start = (i << 22) | (j << 12);
+            uint32_t to_page_start = _mem_alloc_page(&mem_alloc, 1);
+            if (to_page_start == 0) {
+                goto copy_uvm_failed;
+            }
+
+            int created = memory_create_map((pde_t*)to_page_dir, from_page_start,
+                                            to_page_start, 1, get_pte_perm(pte));
+            if (created < 0) {
+                goto copy_uvm_failed;
+            }
+
+            kernel_memcpy((void*)to_page_start, (void*)from_page_start, MEM_PAGE_SIZE);
+        }
+    }
+
+    return to_page_dir;
+
+copy_uvm_failed:
+    if (to_page_dir) {
+        memory_destroy_uvm(to_page_dir);
+    }
+
+    return -1;
+}
+
+void memory_destroy_uvm(uint32_t page_dir) {
+    if (!page_dir) {
+        return;
+    }
+
+    uint32_t user_start_index = pde_index(MEM_TASK_BASE);
+    pde_t *pde = (pde_t*)page_dir + user_start_index;
+    for (int i = user_start_index; i < PDE_CNT; i++, pde++) {
+        if (!pde->present) {
+            continue;
+        }
+
+        uint32_t page_table = pde->phy_pt_addr << 12;
+        pte_t *pte = (pte_t *)page_table;
+        for (int j = 0; j < PTE_CNT; j++, pte++) {
+            if (!pte->present) {
+                continue;
+            }
+
+            uint32_t page = pte->phy_page_addr << 12;
+            _mem_free_page(&mem_alloc, page, 1);
+        }
+
+        _mem_free_page(&mem_alloc, page_table, 1);
+    }
+
+    _mem_free_page(&mem_alloc, page_dir, 1);
+}
+
+uint32_t memory_get_paddr(uint32_t page_dir, uint32_t vaddr) {
+    pde_t *pde = (pde_t*)page_dir + pde_index(vaddr);
+    if (!pde->present) {
+        return 0;
+    }
+
+    uint32_t page_table = pde_paddr(pde);
+
+    pte_t *pte = (pte_t*)page_table + pte_index(vaddr);
+    if (!pte->present) {
+        return 0;
+    }
+
+    return pte_paddr(pte) + (vaddr & 0x00000FFF);
+}
+
+// "to" is the virt addr of "new page directory", but "from" is the virt addr of "old page directory"
+// so need to find the "phy addr of to"
+// should always remember that when virt addr is continuous,
+// "phy addr is not continuous"!
+int memory_copy_uvm_data(uint32_t to, uint32_t page_dir, uint32_t from, uint32_t size) {
+    
+    // below commented is wrong because it assumes paddr is continuous
+    // kernel_memcpy((void*)paddr, (void*)from, size);
+
+    while (size > 0) {
+        uint32_t paddr = memory_get_paddr(page_dir, to);
+        if (!paddr) {
+            return -1;
+        }
+
+        int offset = paddr & 0x00000FFF;
+        int copy_size = MEM_PAGE_SIZE - offset;
+        if (size < copy_size) {
+            copy_size = size;
+        }
+
+        kernel_memcpy((void*)paddr, (void*)from, copy_size);
+
+        size -= copy_size;
+        to += copy_size;
+        from += copy_size;
+    }
+
+    return 0;
+}
+
+// this prototype is actually different from the one 
+// defined in lib_syscall.c, but it is fine!
+char *sys_sbrk(int incr) {
+    task_t *task = task_current();
+
+    uint32_t ret = task->heap_end;
+    
+    ASSERT(incr >= 0);
+    if (incr == 0) {
+        log_printf("sbrk(0), start=0x%x, end=0x%x", task->heap_start, task->heap_end);
+        return (char*)ret;
+    }
+
+    uint32_t offset = task->heap_end & (MEM_PAGE_SIZE - 1);
+    uint32_t left = MEM_PAGE_SIZE - offset;
+    if (incr < left) {
+        task->heap_end += incr;
+        return (char*)ret;
+    }
+
+    uint32_t vstart = task->heap_end + left;
+    uint32_t page_count = up(incr - left + 1, MEM_PAGE_SIZE) / MEM_PAGE_SIZE;
+    alloc_mem_for_task(task->tss.cr3, page_count, vstart, PTE_U | PTE_W | PTE_P);
+    task->heap_end += incr;
+
+    return (char*)ret;
+}
+
