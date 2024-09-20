@@ -4,14 +4,21 @@
 #include "tools/klib.h"
 #include "cpu/cpu.h"
 #include "ipc/mutex.h"
+#include "dev/console.h"
+#include "dev/dev.h"
 
+#define LOG_USE_COM 0
 #define COM1_PORT 0x3F8
 
 static mutex_t mutex;
+static int log_dev_id;
 
 // initialization for RS-232
 void log_init(void) {
     mutex_init(&mutex);
+    log_dev_id = dev_open(DEV_TTY, 0, (void*)0);
+
+#if LOG_USE_COM
     outb(COM1_PORT + 1, 0x00);
     outb(COM1_PORT + 3, 0x80);   
     outb(COM1_PORT + 0, 0x03);
@@ -19,10 +26,13 @@ void log_init(void) {
     outb(COM1_PORT + 3, 0x03);
     outb(COM1_PORT + 2, 0xC7);
     outb(COM1_PORT + 4, 0x0F);
+#endif
+
 }
 
 // qemu is able to display the data going through RS-232,
 // and we are using it to display the log
+// log_printf "automatically" adds \n at the end
 void log_printf(const char *fmt, ...) {
     char str_buf[128];
     kernel_memset(str_buf, '\0', sizeof(str_buf)); // important!
@@ -35,6 +45,7 @@ void log_printf(const char *fmt, ...) {
     // irq_state_t state = irq_enter_protection();
     mutex_lock(&mutex);
 
+#if LOG_USE_COM
     char *p = str_buf;
     while (*p) {
         // check if it is busy or not (check if the sixth bit is zero)
@@ -45,6 +56,15 @@ void log_printf(const char *fmt, ...) {
     
     outb(COM1_PORT, '\r');
     outb(COM1_PORT, '\n');
+#endif
+
+    // console_write(0, str_buf, kernel_strlen(str_buf));
+    // we don't need '\r' because out code make '\n' do both things
+    // console_write(0, "\n", 1);
+
+    dev_write(log_dev_id, 0, str_buf, kernel_strlen(str_buf));
+    char c = '\n';
+    dev_write(log_dev_id, 0, &c, 1);
 
     // irq_leave_protection(state);
     mutex_unlock(&mutex);
