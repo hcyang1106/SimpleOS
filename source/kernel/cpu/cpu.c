@@ -3,9 +3,12 @@
 #include "comm/cpu_instr.h"
 #include "tools/log.h"
 #include "ipc/mutex.h"
+#include "core/syscall.h"
+#include "core/task.h"
 
 static mutex_t mutex;
-
+void exception_handler_syscall(void);
+void syscall_handler(void);
 void exception_handler_unknown (void);
 void exception_handler_divider (void);
 void exception_handler_Debug (void);
@@ -64,8 +67,13 @@ static void do_default_handler(exception_frame_t *frame, char *msg) {
     log_printf("IRQ/Exception happend: %s", msg);
     dump_core_regs(frame);
 
-    for (;;) {
-        hlt();
+    // CS => CPL0, CPL3
+    if (frame->cs & 0x3) {
+        sys_exit(frame->error_code);
+    } else {
+        for (;;) {
+            hlt();
+        }
     }
 }
 
@@ -146,9 +154,15 @@ void do_handler_general_protection(exception_frame_t * frame) {
     log_printf("segment index: %d", frame->error_code & 0xFFF8);
 
     dump_core_regs(frame);
-    while (1) {
-        hlt();
-    }	
+
+    // CS => CPL0, CPL3
+    if (frame->cs & 0x3) {
+        sys_exit(frame->error_code);
+    } else {
+        for (;;) {
+            hlt();
+        }
+    }
 }
 
 void do_handler_page_fault(exception_frame_t * frame) {
@@ -176,9 +190,7 @@ void do_handler_page_fault(exception_frame_t * frame) {
 	
     dump_core_regs(frame);
 
-    for (;;) {
-        hlt();
-    }
+     
 }
 
 void do_handler_fpu_error(exception_frame_t * frame) {
@@ -235,6 +247,13 @@ static void init_gdt(void) {
      SEG_S_NORMAL | SEG_TYPE_CODE | SEG_TYPE_RW | SEG_D | SEG_G);
     segment_desc_set(KERNEL_SELECTOR_DS, 0, 0xFFFFFFFF, SEG_P_PRESENT | SEG_DPL0 |
      SEG_S_NORMAL | SEG_TYPE_DATA | SEG_TYPE_RW | SEG_D | SEG_G) ;
+
+    // for system call, it "saves the gate descriptor in gdt table"
+    // and "inside the descriptor" we can find the "selector for syscall function"
+    gate_desc_set((gate_desc_t*)(gdt_table + (SELECTOR_SYSCALL >> 3)),
+        KERNEL_SELECTOR_CS, (uint32_t)syscall_handler,
+        GATE_P_PRESENT | GATE_DPL3 | GATE_TYPE_SYSCALL | SYSCALL_PARAM_COUNT
+    ); 
 
     lgdt((uint32_t)gdt_table, sizeof(gdt_table));
 }
@@ -368,7 +387,7 @@ int gdt_alloc_desc(void) {
     for (int i = 1; i < GDT_TABLE_SIZE; i++) {
         if (gdt_table[i].attr == 0) {
             // irq_leave_protection(state);
-            // mutex_unlock(&mutex);
+            mutex_unlock(&mutex);
             return i * sizeof(segment_desc_t);
         }
     }

@@ -10,6 +10,9 @@
 #include "tools/list.h"
 #include "ipc/sem.h"
 #include "core/memory.h"
+#include "dev/console.h"
+#include "dev/kbd.h"
+#include "fs/fs.h"
 
 // static task_t main_task; relocate to task
 static task_t init_task;
@@ -21,9 +24,17 @@ void kernel_init(boot_info_t *boot_info) {
     // ASSERT(3 < 2); // used to test ASSERT
     cpu_init();
     log_init();
+    // memory init uses log
+    // may redirect log output to console so put it here
+    // console_init(); // no longer used, it is now in tty_open
     memory_init(boot_info);
+    fs_init();
     time_init();
     task_manager_init();
+
+    // no longer used, it is now in tty_open
+    // kbd_init(); // should be after cpu_init cuz it uses irq_protection
+    
 }
 
 // init task code is later seperated from os code
@@ -36,7 +47,7 @@ void kernel_init(boot_info_t *boot_info) {
 //         // below is not a good way to switch because the switch-to task is fixed
 //         // task_switch_from_to(&init_task, task_main_task());
 //         // below is not a good way because it only stops by itself
-//         // sys_sched_yield();
+//         // sys_yield();
 //         // sys_sleep(500);
 //     }
 // }
@@ -121,6 +132,7 @@ void kernel_init(boot_info_t *boot_info) {
 // }
 
 void move_to_main_task(void) {
+    // task_t *main_task = task_main_task();
     task_t *main_task = task_main_task();
     ASSERT (main_task != (task_t*)0);
 
@@ -156,7 +168,8 @@ void init_main() {
     log_printf("");
 
     // list_test();
-
+    char *s = "testtest";
+    log_printf("%s", s);
     log_printf("Kernel is running...");
     log_printf("Version: %s", OS_VERSION);
     log_printf("%d, %d, %x, %c", 123456, -123, 0x80000000, 't');
@@ -169,6 +182,7 @@ void init_main() {
         // task_init(&main_task, 0, 0); // the main task doesn't need to set entry address and esp
     // stack grows from high to low, when inserting, first minus four then do the insert (so set as 1024)
     // task_init(&init_task, "init task", (uint32_t)init_task_entry, (uint32_t)&init_task_stack[1024]);
+    // main_task_init();
     main_task_init();
         // write_tr(main_task.tss_sel);
 
@@ -184,7 +198,7 @@ void init_main() {
     //     // sem_notify(&sem);
     //     // sys_sleep(1000);
     //     // task_switch_from_to(task_main_task(), &init_task);
-    //     // sys_sched_yield();
+    //     // sys_yield();
     // }
 
     move_to_main_task();
