@@ -62,4 +62,18 @@ static inline void mmu_set_page_dir(uint32_t page_dir) {
     write_cr3(page_dir);
 }
 
+static inline uint32_t get_pte_perm(pte_t *pte) {
+    return (pte->v & 0x1FF);     
+}
+
+static inline uint32_t pde_paddr (pde_t * pde) {
+    return pde->phy_pt_addr << 12;
+}
+
+static inline uint32_t pte_paddr (pte_t * pte) {
+    return pte->phy_page_addr << 12;
+}
+
 #endif
+
+
