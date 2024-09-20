@@ -22,10 +22,17 @@ int bitmap_get_bit(bitmap_t *bitmap, int index) {
 
 void bitmap_set_bit(bitmap_t *bitmap, int index, int count, int value) {
     for (int i = 0; i < count && (index + count - 1 < bitmap->bit_count); i++) {
+        // should already be 1
+        int pre_bit = bitmap->start[(index + i) / 8] & (1 << ((index + i) % 8));
+        ASSERT(value ? !pre_bit : pre_bit);
+
         if (value) {
             bitmap->start[(index + i) / 8] |= (1 << ((index + i) % 8));
         } else {
-            bitmap->start[(index + i) / 8] &= (0 << ((index + i) % 8));      
+            // originally i wrote the line below which is wrong
+            // it also eliminates its neighbor pages 
+            // bitmap->start[(index + i) / 8] &= (0 << ((index + i) % 8));      
+            bitmap->start[(index + i) / 8] &= ~(1 << ((index + i) % 8));      
         }  
     }
 }
@@ -59,6 +66,9 @@ int bitmap_alloc_nbits(bitmap_t *bitmap, int bit, int count) {
         
         start_idx = check_idx + 1;
     }
+
+    return -1;
 }
+
 
 
