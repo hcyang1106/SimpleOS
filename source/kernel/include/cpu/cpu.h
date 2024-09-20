@@ -6,6 +6,8 @@
 #define EFLAGS_IF           (1 << 9)
 #define EFLAGS_DEFAULT      (1 << 1)
 
+#pragma pack(1)
+
 typedef struct _tss_t {
     uint32_t prelink;
     uint32_t esp0, ss0, esp1, ss1, esp2, ss2;
@@ -15,8 +17,6 @@ typedef struct _tss_t {
     uint32_t ldt;
     uint32_t iomap;
 }tss_t;
-
-#pragma pack(1)
 
 // _segment_desc_t can be ignored
 typedef struct _segment_desc_t { 
@@ -92,6 +92,7 @@ void switch_to_tss(int tss_sel);
 #define GATE_DPL3 (3 << 13)
 #define GATE_D (1 << 11)
 #define GATE_TYPE_INT (0xE << 8)
+#define GATE_TYPE_SYSCALL (0xC << 8)
 
 #define IRQ0_DE 0
 #define IRQ1_DB 1
@@ -114,6 +115,8 @@ void switch_to_tss(int tss_sel);
 #define IRQ20_VE 20
 
 #define IRQ0_TIMER          0x20
+#define IRQ1_KEYBOARD       0x21
+#define IRQ14_DISK_PRIMARY  0x2E 
 
 #define PIC0_ICW1			0x20
 #define PIC0_ICW2			0x21
