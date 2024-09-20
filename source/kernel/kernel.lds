@@ -6,11 +6,11 @@ SECTIONS {
     PROVIDE(s_text = .);
     .text : {
         # merge the text sections of all object files
-        *(EXCLUDE_FILE(*main_task*) .text)
+        *(EXCLUDE_FILE(*main_task* *lib_syscall*) .text)
     }
 
     .rodata : {
-        *(EXCLUDE_FILE(*main_task*) .rodata)
+        *(EXCLUDE_FILE(*main_task* *lib_syscall*) .rodata)
     }
     PROVIDE(e_text = .);
 
@@ -19,11 +19,11 @@ SECTIONS {
     . = ALIGN(4096);
     PROVIDE(s_data = .);
     .data : {
-        *(EXCLUDE_FILE(*main_task*) .data)
+        *(EXCLUDE_FILE(*main_task* *lib_syscall*) .data)
     }
 
     .bss : {
-        *(EXCLUDE_FILE(*main_task*) .bss)
+        *(EXCLUDE_FILE(*main_task* *lib_syscall*) .bss)
     }
     e_data = .; # is a virtual address, but below 1MB, virtual equals to physical
 
@@ -32,6 +32,9 @@ SECTIONS {
     .main_task : AT(e_data){                                  # a space must exist between "main_task" and ":"!
         *main_task_entry*(.text .rodata .bss .data) # .S file
         *main_task*(.text .rodata .bss .data)       # .c file
+        *lib_syscall*(.text .rodata .bss .data) 
+        # cstart and ctr0 doesn't need to be here
+        # because it is not used by main_task
     }
     PROVIDE(e_main_task = LOADADDR(.main_task) + SIZEOF(.main_task)); # loadaddr returns the physical address
 
@@ -39,6 +42,8 @@ SECTIONS {
     # it accessible by c
     PROVIDE(mem_free_start = e_main_task);
 }
+
+# LOADADDR controls paddr and is for loader to load
 
 # text: section where instructions locates at
 # rodata: stores constants (including strings)
