@@ -1,5 +1,6 @@
 #include "loader.h"
 #include "comm/elf.h"
+#include "os_cfg.h"
 
 static void read_disk(uint32_t sector, uint32_t sector_count, uint8_t *buf) {
     outb(0x1F6, 0xE0); // fifth and seventh bit should be set to 1 (fixed usage), sixth bit is set to 1 to choose LBA mode
@@ -30,7 +31,7 @@ static uint32_t reload_elf_file(uint8_t *file_buffer) {
     if ((elf_hdr->e_ident[0] != 0x7f) || (elf_hdr->e_ident[1] != 'E')
         || (elf_hdr->e_ident[2] != 'L') || (elf_hdr->e_ident[3] != 'F')) {
             return 0;
-        }
+    }
 
     for (int i = 0; i < elf_hdr->e_phnum; i++) {
         Elf32_Phdr *phdr = (Elf32_Phdr *)(file_buffer + elf_hdr->e_phoff) + i; // e_phoff is the offset of the program head table
@@ -49,6 +50,7 @@ static uint32_t reload_elf_file(uint8_t *file_buffer) {
         // Elf file uses memsz to specify how large bss and rodata combined is.
         // dest = (uint8_t *)phdr->p_paddr + phdr->p_filesz;
         for (int j = 0; j < phdr->p_memsz - phdr->p_filesz; j++) {
+            // set as zeros and this is why bss area are zeros
             *dest++ = 0;
         }
     }
