@@ -2,7 +2,7 @@
 #define BOOT_INFO_H
 
 #define BOOT_RAM_REGION_MAX 10
-#define SECTOR_SIZE 512
+
 // kernel is put at memory address above 1MB (where protected mode could reach)
 #define SYS_KERNEL_LOAD_ADDR (1024 * 1024)
 
@@ -58,4 +58,3 @@ typedef struct _SMAP_entry_t {
 
 
 #endif
-
