@@ -61,7 +61,7 @@ void log_printf(const char *fmt, ...) {
     // console_write(0, str_buf, kernel_strlen(str_buf));
     // we don't need '\r' because out code make '\n' do both things
     // console_write(0, "\n", 1);
-
+    dev_write(log_dev_id, 0, "log:", 4);
     dev_write(log_dev_id, 0, str_buf, kernel_strlen(str_buf));
     char c = '\n';
     dev_write(log_dev_id, 0, &c, 1);

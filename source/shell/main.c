@@ -194,11 +194,10 @@ static int do_ls(int argc, char **argv) {
     struct dirent *entry;
     while ((entry = readdir(p_dir)) != NULL) {
         strlwr(entry->name);
-        printf("%c %s %d %d\n",
+        printf("%c %s %d\n",
                 entry->type == FILE_DIR ? 'd':'f',
                 entry->name,
-                entry->size,
-                entry->index
+                entry->size
         );
     }
 
@@ -295,9 +294,14 @@ static int run_builtin_func(const cli_cmd_t *cmd, int argc, char**argv) {
 }
 
 static int check_file_exist(const char *name) {
+    char path[255];
     int fd = open(name, 0);
     if (fd < 0) {
-        return -1;
+        sprintf(path, "%s.elf", name);
+        fd = open(path, 0);
+        if (fd < 0) {
+            return -1;
+        }
     }
     close(fd);
     return 0;
@@ -372,9 +376,7 @@ int main(int argc, char **argv) {
     dup(0);
 
     cli_init();
-    printf("Hello From Shell\n");
-    puts("test");
-    fprintf(stderr, "error\n");
+    
     int pid = getpid();
     for (;;) {
         // gets reads until a newline (not included)

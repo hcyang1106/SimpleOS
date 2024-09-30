@@ -28,7 +28,7 @@ int main_task(void) {
     }
 #endif
     // for (int i = 0; i < TTY_NUM; i++) {
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < TTY_NUM; i++) {
         int ret = fork();
         if (ret < 0) {
             print_msg("fork failed in main task", 0);

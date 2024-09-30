@@ -165,15 +165,12 @@ void move_to_main_task(void) {
 }
 
 void init_main() {
-    log_printf("");
 
     // list_test();
-    char *s = "testtest";
-    log_printf("%s", s);
+    log_printf("========================");
     log_printf("Kernel is running...");
     log_printf("Version: %s", OS_VERSION);
-    log_printf("%d, %d, %x, %c", 123456, -123, 0x80000000, 't');
-    log_printf("%d", sizeof(unsigned long));
+    log_printf("========================");
 
     // when this exception happens, it executes the instruction again
     // therefore if exception in kernel happens it stucks
