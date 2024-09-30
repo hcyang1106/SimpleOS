@@ -1,6 +1,8 @@
 #ifndef FATFS_H
 #define FATFS_H
 
+#include "ipc/mutex.h"
+
 #define FAT_CLUSTER_INVALID 0xFFF8
 #define FAT_CLUSTER_FREE 0x00
 
@@ -74,6 +76,7 @@ typedef struct _fat_t {
     uint8_t *fat_buffer;
     uint32_t sector_idx; // absolute sector index
     struct _fs_t *fs;
+    mutex_t mutex; 
 } fat_t;
 
 #endif

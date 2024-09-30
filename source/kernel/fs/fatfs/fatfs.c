@@ -38,8 +38,11 @@ int fatfs_mount(struct _fs_t *fs, int major, int minor) {
     fat->data_start = fat->root_start + fat->root_ent_cnt * 32 / fat->bytes_per_sec;
     fat->cluster_byte_size = fat->bytes_per_sec * fat->sec_per_cluster;
     fat->fat_buffer = (uint8_t*)dbr;
-
+    fat->sector_idx = -1;
     fat->fs = fs;
+
+    mutex_init(&fat->mutex);
+    fs->mutex = &fat->mutex;
 
     if (fat->tbl_cnt != 2) {
         log_printf("fat table num error, major: %x, minor: %x", major, minor);

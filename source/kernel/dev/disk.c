@@ -313,7 +313,7 @@ int disk_write(device_t *dev, int start_sector, char *buf, int count) {
     //         // sem_notify(disk->osem_empty); // notify by interrupt
     //     }
     // }
-    
+    mutex_unlock(disk->mutex);
     return count;
 }
 
