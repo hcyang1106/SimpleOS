@@ -84,9 +84,10 @@ typedef struct _disk_t {
     int sector_count;
     partinfo_t partinfo[DISK_PRIM_PART_NUM];
     mutex_t *mutex;
-    sem_t *osem_full;
+    sem_t *osem_full; // not used anymore
     sem_t *isem;
-    fifo_t *ofifo;
+    sem_t *osem; // isem and osem can be combined
+    fifo_t *ofifo; // not used anymore
 }disk_t;
 
 void disk_init(void);

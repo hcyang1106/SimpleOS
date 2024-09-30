@@ -104,11 +104,12 @@ static int read_dir_entry(fat_t *fat, int index, diritem_t *item) {
 
     int sector_idx = fat->root_start + index * sizeof(diritem_t) / fat->bytes_per_sec;
     int offset = (index * sizeof(diritem_t)) % fat->bytes_per_sec;
-    // if (fat->sector_idx == sector_idx) {
-    //     // % fat->bytes_per_sec is needed!
-    //     *item = (diritem_t*)(fat->fat_buffer + (index * sizeof(diritem_t)) % fat->bytes_per_sec);
-    //     return 0;
-    // }
+    if (fat->sector_idx == sector_idx) {
+        // % fat->bytes_per_sec is needed!
+        // *item = *(diritem_t*)(fat->fat_buffer + (index * sizeof(diritem_t)) % fat->bytes_per_sec);
+        kernel_memcpy(item, (fat->fat_buffer + offset), sizeof(diritem_t));
+        return 0;
+    }
 
     int ret = dev_read(fat->fs->dev_id, sector_idx, fat->fat_buffer, 1);
     if (ret != 1) {
@@ -157,16 +158,16 @@ static int write_dir_entry(fat_t *fat, diritem_t *item, int index) {
     int sector_idx = fat->root_start + index * sizeof(diritem_t) / fat->bytes_per_sec;
     int offset = (index * sizeof(diritem_t)) % fat->bytes_per_sec;
     // cache hit
-    // if (fat->sector_idx == sector_idx) {
-    //     // this line doesn't work and reason remains unknown
-    //     // *(diritem_t*)(fat->fat_buffer + (index * sizeof(diritem_t)) % fat->bytes_per_sec) = *item;
-    //     kernel_memcpy(fat->fat_buffer + (index * sizeof(diritem_t)) % fat->bytes_per_sec, item, sizeof(diritem_t));
-    //     int ret = dev_write(fat->fs->dev_id, sector_idx, fat->fat_buffer, 1);
-    //     if (ret != 1) {
-    //         return -1;
-    //     }
-    //     return 0;
-    // }
+    if (fat->sector_idx == sector_idx) {
+        // this line doesn't work and reason remains unknown
+        // *(diritem_t*)(fat->fat_buffer + (index * sizeof(diritem_t)) % fat->bytes_per_sec) = *item;
+        kernel_memcpy(fat->fat_buffer + (index * sizeof(diritem_t)) % fat->bytes_per_sec, item, sizeof(diritem_t));
+        int ret = dev_write(fat->fs->dev_id, sector_idx, fat->fat_buffer, 1);
+        if (ret != 1) {
+            return -1;
+        }
+        return 0;
+    }
 
     // cache miss
     // read from disk to cache first
@@ -206,14 +207,14 @@ static int cluster_set_next(fat_t *fat, uint16_t cluster_num, uint16_t next) {
     int sector_offset = offset % fat->bytes_per_sec;
 
     // hit
-    // if (fat->sector_idx == sector_idx) {
-    //     *(uint16_t*)(fat->fat_buffer + sector_offset) = next;
-    //     int ret = dev_write(fat->fs->dev_id, sector_idx, fat->fat_buffer, 1);
-    //     if (ret < 0) {
-    //         return ret;
-    //     }
-    //     return 0;
-    // }
+    if (fat->sector_idx == sector_idx) {
+        *(uint16_t*)(fat->fat_buffer + sector_offset) = next;
+        int ret = dev_write(fat->fs->dev_id, sector_idx, fat->fat_buffer, 1);
+        if (ret < 0) {
+            return ret;
+        }
+        return 0;
+    }
 
     // miss
     // read from disk 
@@ -239,9 +240,9 @@ uint16_t cluster_get_next(fat_t *fat, int curr_block) {
     // an entry is 16 bit long
     int offset = curr_block * sizeof(uint16_t);
     int sector_idx = fat->tbl_start + offset / fat->bytes_per_sec;
-    // if (fat->sector_idx == sector_idx) {
-    //     return *(uint16_t*)(fat->fat_buffer + offset % fat->bytes_per_sec); 
-    // }
+    if (fat->sector_idx == sector_idx) {
+        return *(uint16_t*)(fat->fat_buffer + offset % fat->bytes_per_sec); 
+    }
 
     int ret = dev_read(fat->fs->dev_id, sector_idx, fat->fat_buffer, 1);
     if (ret < 0) {
@@ -320,9 +321,6 @@ static int expand_file(file_t *file, int inc_size) {
     fat_t *fat = (fat_t*)file->fs->data;
     int cluster_offset = (file->size - 1) % fat->cluster_byte_size;
     int cluster_remain = (fat->cluster_byte_size - 1) - cluster_offset;
-    if (file->pos != 0 && file->pos == file->size && file->pos % fat->cluster_byte_size == 0) {
-        cluster_remain = fat->cluster_byte_size;
-    }
 
     if (inc_size > cluster_remain) {
         int cluster_extra_need = up(inc_size - cluster_remain, fat->cluster_byte_size) / fat->cluster_byte_size;
@@ -503,9 +501,9 @@ int fatfs_write(char *buf, int size, file_t *file) {
         int cluster_offset = file->pos % fat->cluster_byte_size;
         int start_sector = fat->data_start + fat->sec_per_cluster * (file->cblk - 2);
         if (cluster_offset == 0 && nbytes >= fat->cluster_byte_size) {
-            // if (fat->sector_idx == start_sector) {
-            //     kernel_memcpy(fat->fat_buffer, buf, fat->cluster_byte_size);
-            // }
+            if (fat->sector_idx == start_sector) {
+                kernel_memcpy(fat->fat_buffer, buf, fat->cluster_byte_size);
+            }
             int ret = dev_write(fat->fs->dev_id, start_sector, buf, fat->sec_per_cluster);
             if (ret < 0) {
                 log_printf("dev write failed during fatfs write");
@@ -524,13 +522,13 @@ int fatfs_write(char *buf, int size, file_t *file) {
 
         int cluster_remain = fat->cluster_byte_size - cluster_offset;
         int write_bytes = (nbytes > cluster_remain) ? cluster_remain : nbytes;
-        // if (fat->sector_idx != start_sector) {
+        if (fat->sector_idx != start_sector) {
             fat->sector_idx = start_sector;
             int err = dev_read(fat->fs->dev_id, start_sector, fat->fat_buffer, fat->sec_per_cluster);
             if (err < 0) {
                 return total_write;
             }
-        //}
+        }
 
         kernel_memcpy(fat->fat_buffer + cluster_offset, buf, write_bytes);
             

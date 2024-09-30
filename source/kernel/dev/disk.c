@@ -12,9 +12,10 @@ static disk_t disk_buf[DISK_NUM];
 static mutex_t disk_mutex;
 static char disk_obuf[DISK_OBUF_SIZE];
 static fifo_t disk_ofifo;
-static sem_t disk_osem_full;
+// static sem_t disk_osem_full; not used anymore
 static sem_t disk_isem;
 static disk_t *curr_disk;
+static sem_t disk_osem; // disk_isem and disk_osem can be combined (use only one sem)
 
 static enum {
     DISK_STATE_READ = 0,
@@ -159,7 +160,8 @@ void disk_init(void) {
     kernel_memset(disk_obuf, 0, sizeof(disk_obuf));
     fifo_init(&disk_ofifo, disk_obuf, DISK_OBUF_SIZE);
     sem_init(&disk_isem, 0);
-    sem_init(&disk_osem_full, DISK_OBUF_SIZE / SECTOR_SIZE);
+    sem_init(&disk_osem, 0);
+    // sem_init(&disk_osem_full, DISK_OBUF_SIZE / SECTOR_SIZE);
     for (int i = 0; i < DISK_PER_CHANNEL; i++) {
         disk_t *disk = disk_buf + i;
         kernel_sprintf(disk->name, "sd%c", i + 'a');
@@ -167,8 +169,9 @@ void disk_init(void) {
         disk->port_base = IOBASE_PRIMARY;
         disk->mutex = &disk_mutex;
         disk->isem = &disk_isem;
-        disk->osem_full = &disk_osem_full;
+        // disk->osem_full = &disk_osem_full;
         disk->ofifo = &disk_ofifo;
+        disk->osem = &disk_osem; // 加的
 
         int err = identify_disk(disk);
         if (err == 0) {
@@ -264,27 +267,53 @@ int disk_write(device_t *dev, int start_sector, char *buf, int count) {
     state = DISK_STATE_WRITE;
 
     disk_send_cmd(disk, part->start_sector + start_sector, count, DISK_CMD_WRITE);
-    char *curr = buf;
-    if (count > 1) {
-        curr += SECTOR_SIZE;
-        for (int i = 0; i < count - 1; i++) {
-            if (task_current()) {
-                sem_wait(disk->osem_full);
-            }
-            fifo_put_sector_size(disk->ofifo, curr);
-            curr += SECTOR_SIZE;
-            // sem_notify(disk->osem_empty); // notify by interrupt
+
+    for (int i = 0; i < count; i++) {
+        disk_write_data(disk, buf, disk->sector_size);
+
+        if (task_current()) {
+            sem_wait(disk->osem);
+        }
+
+        int err = disk_wait_data(disk);
+        if (err < 0) {
+            log_printf("disk(%s) write error: start sect %d, count %d", disk->name, start_sector, count);
+            break;
         }
     }
 
-    int ret = disk_wait_data(disk);
-    if (ret < 0) {
-        log_printf("disk error occurred, device=%d", dev->minor);
-        return -1;
-    }
-    disk_write_data(disk, buf, SECTOR_SIZE);
-    curr += SECTOR_SIZE;
+    // if (disk->ofifo->count == 0) {
+    //     char *curr = buf;
+    //     if (count > 1) {
+    //         curr += SECTOR_SIZE;
+    //         for (int i = 0; i < count - 1; i++) {
+    //             if (task_current()) {
+    //                 sem_wait(disk->osem_full);
+    //             }
+    //             fifo_put_sector_size(disk->ofifo, curr);
+    //             curr += SECTOR_SIZE;
+    //             // sem_notify(disk->osem_empty); // notify by interrupt
+    //         }
+    //     }
 
+    //     int ret = disk_wait_data(disk);
+    //     if (ret < 0) {
+    //         log_printf("disk error occurred, device=%d", dev->minor);
+    //         return -1;
+    //     }
+    //     disk_write_data(disk, buf, SECTOR_SIZE);
+    //     curr += SECTOR_SIZE;
+    // } else {
+    //     for (int i = 0; i < count; i++) {
+    //         if (task_current()) {
+    //             sem_wait(disk->osem_full);
+    //         }
+    //         fifo_put_sector_size(disk->ofifo, buf);
+    //         buf += SECTOR_SIZE;
+    //         // sem_notify(disk->osem_empty); // notify by interrupt
+    //     }
+    // }
+    
     return count;
 }
 
@@ -301,16 +330,19 @@ void do_handler_disk_primary(exception_frame_t *frame) {
     switch (state)
     {
     case DISK_STATE_WRITE:
-        char *curr;
-        if (fifo_get_sector_size(curr_disk->ofifo, &curr) < 0) {
-            mutex_unlock(curr_disk->mutex);
-            return;
-        }
+        // char *curr;
+        // if (fifo_get_sector_size(curr_disk->ofifo, &curr) < 0) {
+        //     mutex_unlock(curr_disk->mutex);
+        //     return;
+        // }
 
-        disk_wait_data(curr_disk);
-        disk_write_data(curr_disk, curr, SECTOR_SIZE);
+        // disk_wait_data(curr_disk);
+        // disk_write_data(curr_disk, curr, SECTOR_SIZE);
+        // if (task_current()) {
+        //     sem_notify(curr_disk->osem_full);
+        // }
         if (task_current()) {
-            sem_notify(curr_disk->osem_full);
+            sem_notify(curr_disk->osem);
         }
         break;
     case DISK_STATE_READ:

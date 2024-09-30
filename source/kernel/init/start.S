@@ -147,7 +147,7 @@ syscall_handler:
 
     push %esp
     # a function that carries one param
-    # the param is esp, which 
+    # the param is esp, which stores the address of syscall_args_t
     call do_handler_syscall
     add $4, %esp
 
