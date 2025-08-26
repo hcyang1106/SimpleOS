@@ -1588,12 +1588,14 @@ System calls allow user-level processes (CPL = 3) to request services from the k
 
 - To trigger the system call:
   ````assembly
-  lcall far [selector]  ; selector must point to the call gate descriptor
+  lcall %[offset(0), selector]  ; selector must point to the call gate descriptor
   ````
 - RPL (Requested Privilege Level) of the selector must be 3 because the calling process is running at CPL = 3 (RPL >= CPL).
   - CPU checks max(CPL, RPL) <= DPL of the call gate.
   - So if DPL = 3, and CPL = RPL = 3 → pass.
   - If DPL < max(CPL, RPL) → the call is rejected.
+  - (Added Side Note) For destination code, DPL_dest ≤ CPL, and CPL elevates to DPL_dest.
+  - (See Additional Notes!)
 
 - The target handler itself is located in kernel space, which has privilege level 0.
 
@@ -2318,6 +2320,40 @@ file->fs->op->close(...)
 29. **fatfs_read and fatfs_write**
    - Note that the basic read/write unit is cluster.
    - That is, in our design we can't read or write on a certain sector (I think we can but the code follows the rule).
+
+30. **Privilege Check Rules of Call Gate**
+
+## 1. Normal Data Access
+- Uses the data-segment register selector (DS/ES/FS/GS/SS).  
+- Rule:  
+  ````
+  EPL = max(CPL, selector.RPL)
+  Access allowed if EPL ≤ DPL_data
+  ````
+
+## 2. Executing Code
+- Instruction fetch always uses **CS**.  
+- CPL = CS.RPL (directly).  
+- No `max()` is needed: CPL alone defines your current privilege level.
+
+## 3. Through a Call Gate
+When you execute `lcall` via a **call gate**:
+
+### (A) Gate Access Check
+- Compute `EPL = max(CPL, gate_selector.RPL)`.  
+- Access allowed if `EPL ≤ DPL_gate`.
+
+### (B) Destination Segment Check
+- The call gate points to a **target code-segment selector** + offset.  
+- Rule: `DPL_dest ≤ CPL`.  
+  (You cannot jump to a *less privileged* segment, only equal or more privileged).
+
+### (C) On Success
+- CPU loads **CS ← target selector** (from the gate).  
+- New **CPL = new CS.RPL**.  
+- Important:  
+  - CPU does **not** automatically set CPL (after going through call gate) as DPL_dest.  
+  - However in practice, OS designers usually set `target_selector.RPL = DPL_dest`, so that **CPL == DPL_dest** after the transition.
 
 ---
 
