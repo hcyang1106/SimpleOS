@@ -2353,6 +2353,14 @@ file->fs->op->close(...)
            - CPU does **not** automatically set CPL (after going through call gate) as DPL_dest.  
            - However in practice, OS designers usually set `target_selector.RPL = DPL_dest`, so that **CPL == DPL_dest** after the transition.
 
+31. **How to Implement Copy-on-write**
+- The important concept is to:
+   - 1. Make pte read-only (VMA still remains writable)
+   - 2. Reference bit in `physical page struct`
+- If COW is detected, check the reference count.
+   - If no others referencing, simply modify pte to writable.
+   - Else, allocate a physical page, copy the page, set as writable, and decrease the reference count.
+
 ---
 
 ## C Language Skills
